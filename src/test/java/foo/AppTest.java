@@ -1,8 +1,12 @@
 package foo;
 
+import java.net.InetSocketAddress;
+
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import emmi.executor.ExecutorQueue;
+import emmi.io.SocketHelper;
 
 /**
  * Unit test for simple App.
@@ -34,5 +38,9 @@ public class AppTest
     public void testApp()
     {
         assertTrue( true );
+        
+        SocketHelper socketHelper = SocketHelper.create(new InetSocketAddress("localhost", 22));
+        
+        ExecutorQueue queue = ExecutorQueue.getGlobalInstance(0);
     }
 }
