@@ -1,12 +1,12 @@
 package emmi.executor;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class SerialExecutorQueue extends ExecutorQueue {
-	private ReentrantLock serialLock = new ReentrantLock();
+	private Semaphore serialLock = new Semaphore(1);
 	private ConcurrentLinkedQueue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
 	
 	
@@ -24,7 +24,8 @@ public class SerialExecutorQueue extends ExecutorQueue {
 			try {
 				runnable.run();
 			} finally {
-				serialLock.unlock();
+				serialLock.release();
+				operator.signal(SerialExecutorQueue.this);
 			}
 		}
 	}
@@ -41,19 +42,26 @@ public class SerialExecutorQueue extends ExecutorQueue {
 		private Runnable runnable;
 		private ReentrantLock syncLock = new ReentrantLock();
 		private Condition notDone = syncLock.newCondition();
-		private AtomicBoolean taskFinished = new AtomicBoolean(false);
+		private volatile boolean taskFinished = false;
 		public SyncTask(Runnable runnable) { this.runnable = runnable; }
 		
 		public void run() {
-			runnable.run();
-			taskFinished.set(true);
-			notDone.signal();
+			syncLock.lock();
+			try {
+				runnable.run();
+			} finally {
+				serialLock.release();
+				taskFinished = true;
+				notDone.signal();
+				syncLock.unlock();
+				operator.signal(SerialExecutorQueue.this);
+			}
 		}
 		
 		public void await() {
 			syncLock.lock();
 			try {
-				while (!taskFinished.compareAndSet(true, true)) {
+				while (!taskFinished) {
 					notDone.awaitUninterruptibly();
 				}
 			} finally {
@@ -74,12 +82,13 @@ public class SerialExecutorQueue extends ExecutorQueue {
 
 	@Override
 	protected Runnable pump() {
-		if (!serialLock.tryLock()) {
+		// do not wait if queue is already executing a task
+		if (!serialLock.tryAcquire()) {
 			return null;
 		}
 		Runnable runnable = taskQueue.poll();
 		if (null == runnable) {
-			serialLock.unlock();
+			serialLock.release();
 		}
 		return runnable;
 	}

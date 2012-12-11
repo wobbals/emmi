@@ -1,11 +1,29 @@
 package emmi.executor;
 
-public class ConcurrentExecutorQueue extends ExecutorQueue {
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
 
+public class ConcurrentExecutorQueue extends ExecutorQueue {
+	private Semaphore barrierLock = new Semaphore(1);
+	private ConcurrentLinkedQueue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+	
 	@Override
 	public void submitAsync(Runnable runnable) {
-		// TODO Auto-generated method stub
+		taskQueue.offer(new AsyncTask(runnable));
+		operator.signal(this);
+	}
+	
+	private class AsyncTask implements Runnable {
+		private Runnable runnable;
+		public AsyncTask(Runnable runnable) { this.runnable = runnable; }
 		
+		public void run() {
+			try {
+				runnable.run();
+			} finally {
+				operator.signal(ConcurrentExecutorQueue.this);
+			}
+		}
 	}
 
 	@Override
