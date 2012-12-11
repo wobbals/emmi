@@ -13,7 +13,7 @@ public class SerialExecutorQueue extends ExecutorQueue {
 	@Override
 	public void submitAsync(Runnable runnable) {
 		taskQueue.offer(new AsyncTask(runnable));
-		operator.signal(this);
+		signalOperator();
 	}
 	
 	private class AsyncTask implements Runnable {
@@ -25,7 +25,6 @@ public class SerialExecutorQueue extends ExecutorQueue {
 				runnable.run();
 			} finally {
 				serialLock.release();
-				operator.signal(SerialExecutorQueue.this);
 			}
 		}
 	}
@@ -34,7 +33,7 @@ public class SerialExecutorQueue extends ExecutorQueue {
 	public void submitSync(Runnable runnable) {
 		SyncTask syncRunnable = new SyncTask(runnable);
 		taskQueue.offer(syncRunnable);
-		operator.signal(this);
+		signalOperator();
 		syncRunnable.await();
 	}
 	
@@ -54,7 +53,6 @@ public class SerialExecutorQueue extends ExecutorQueue {
 				taskFinished = true;
 				notDone.signal();
 				syncLock.unlock();
-				operator.signal(SerialExecutorQueue.this);
 			}
 		}
 		
